@@ -8,7 +8,7 @@ var mosca = require('mosca')
         database    : 'sensormonitor',
         port        : 3307
     }),
-    POLLING_INTERVAL = 5000,
+    POLLING_INTERVAL = 3000,
     pollingTimer = undefined;
 
 var settings = {
@@ -33,13 +33,14 @@ console.log('client connected', client.id);
 // fired when a message is received
 server.on('published', function(packet, client) {
 	//console.log('Published : ', packet.payload);
-	console.log('Published: ', packet.topic, packet.payload, client);
+	if(client){
+	console.log('Published: ', packet.topic, packet.payload.toString(), client.id);
 	var topic = packet.topic;
-	var payload = packet.payload;
+	var payload = packet.payload.toString();
 	if(topic.indexOf('temperatureUpdate-') === 0){
 		var sensorId = topic.substr(18);
                 console.log('sensorId', sensorId)
-		if(payloadd === 'graph'){
+		if(payload === 'graph'){
 			console.log('do graph');
 		} else{
 			console.error('Operacion no definida');
@@ -53,6 +54,7 @@ server.on('published', function(packet, client) {
 		} else {
 			console.error('Topic no reconocido');
 		}
+	}
 	}
 });
 // fired when a client subscribes to a topic
@@ -96,7 +98,7 @@ server.on('clientDisconnected', function(client) {
 var pollingLoop = function (sensorId) {
     
     // Make the database query
-    var query = connection.query('SELECT value from sensorValue where sensorId=' + sensorId + ' order by captureDate desc limit 1'),
+    var query = connection.query('SELECT SQL_NO_CACHE value, sensorId, captureDate from sensorValue where sensorId=' + sensorId + ' order by captureDate desc limit 1'),
         temperatures = []; // this array will contain the result of our db query
 
 
@@ -110,28 +112,36 @@ var pollingLoop = function (sensorId) {
     })
     .on('result', function( temperature ) {
         // it fills our array looping on each user row inside the db
-        //console.log(temperature);
+        console.log(temperature);
 	temperatures.push( temperature );
     })
     .on('end',function(){
         // loop on itself only if there are sockets still connected
         if(connectionsArray.length) {
-            pollingTimer = setTimeout( pollingLoop(sensorId), POLLING_INTERVAL );
+            pollingTimer = setTimeout( function(){ pollingLoop(sensorId); }, POLLING_INTERVAL );
 
 	    var msg = {
 		topic: 'temperatureUpdate-' + sensorId,
 		payload: JSON.stringify(temperatures)
 		};
+		console.log(new Date(), msg);
 
-            server.publish(msg);
+            sendMessage(msg);
+		temperatures = [];
+		msg = undefined;
+
+		//pollingTimer = setTimeout( pollingLoop(sensorId), POLLING_INTERVAL );
         }
     });
 
 };
+var sendMessage = function(mesg){
+	server.publish(mesg);
+}
 
 var getSensorStatus = function(){
-	//console.log('getSensorStatus');
-	var query = connection.query('select name, status from sensor order by id asc');
+	console.log('getSensorStatus');
+	var query = connection.query('select SQL_NO_CACHE name, status from sensor order by id asc');
 	var sensors = [];
     // set up the query listeners
     query
@@ -152,6 +162,6 @@ var getSensorStatus = function(){
                 payload: JSON.stringify(sensors)
                 };
 
-        server.publish(msg);	
+        sendMessage(msg);	
     });
 }
