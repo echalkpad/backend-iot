@@ -160,7 +160,7 @@ var sendMessage = function (mesg) {
 
 var getSensorStatus = function () {
     console.log('getSensorStatus');
-    var query = connection.query('select SQL_NO_CACHE name, status from sensor order by id asc');
+    var query = connection.query('select SQL_NO_CACHE id, name, status from sensor order by id asc');
     var sensors = [];
     // set up the query listeners
     query
